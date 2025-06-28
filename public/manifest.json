@@ -1,24 +1,40 @@
 {
   "manifest_version": 3,
 
-  "name": "Chrome Extension TypeScript Starter",
-  "description": "Chrome Extension, TypeScript, Visual Studio Code",
+  "name": "Waitful",
+  "description": "A mindful browsing extension that helps you stay focused by adding intentional pauses",
   "version": "1.0",
 
   "options_ui": {
-    "page": "options.html"
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_icon": {
+      "32": "icons/icon32.png",
+      "128": "icons/icon128.png",
+      "192": "icons/icon192.png",
+      "256": "icons/icon256.png",
+      "512": "icons/icon512.png"
+    },
+    "default_popup": "popup.html",
+    "default_title": "Waitful - Mindful Browsing"
   },
 
-  "action": {
-    "default_icon": "icon.png",
-    "default_popup": "popup.html"
+  "icons": {
+    "32": "icons/icon32.png",
+    "128": "icons/icon128.png",
+    "192": "icons/icon192.png",
+    "256": "icons/icon256.png",
+    "512": "icons/icon512.png"
   },
 
   "content_scripts": [
-      {
-          "matches": ["<all_urls>"],
-          "js": ["js/vendor.js", "js/content_script.js"]
-      }
+    {
+      "matches": ["<all_urls>"],
+      "js": ["js/vendor.js", "js/content_script.js"],
+      "run_at": "document_start"
+    }
   ],
 
   "background": {
@@ -26,10 +42,20 @@
   },
 
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab",
+    "tabs",
+    "notifications"
   ],
 
   "host_permissions": [
     "<all_urls>"
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["pause-overlay.html", "icons/*"],
+      "matches": ["<all_urls>"]
+    }
   ]
 }
