@@ -6,21 +6,7 @@ import Schedule from "./Schedule";
 import Goals from "./Goals";
 import Stats from "./Stats";
 import Privacy from "./Privacy";
-
-interface Settings {
-  defaultFocusTime: number;
-  pauseDuration: number;
-  enableNotifications: boolean;
-  enableSounds: boolean;
-  dailyTimeLimit: number;
-  distractingSites: string[];
-  allowedBreakTime: number;
-  darkMode: boolean;
-  weeklyGoal: number;
-  focusGoal: number;
-  enableAnalytics: boolean;
-  shareData: boolean;
-}
+import { Settings } from "./types";
 
 const defaultSettings: Settings = {
   defaultFocusTime: 25,
