@@ -1,24 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-
-interface BreathingOverlayProps {
-  duration: number;
-  siteName: string;
-  onComplete: () => void;
-  onSkip: (reason: string) => void;
-}
-
-interface SiteHistory {
-  visitTimestamps: number[];
-}
+import { BreathingOverlayProps, SiteHistory } from "./types";
 
 const BreathingOverlay = (props: BreathingOverlayProps) => {
   const { duration, siteName, onComplete, onSkip } = props;
-  const [breathingPhase, setBreathingPhase] = useState<"ready" | "inhale" | "complete">(
-    "ready"
-  );
+  const [breathingPhase, setBreathingPhase] = useState<
+    "ready" | "inhale" | "complete"
+  >("ready");
   const [fillHeight, setFillHeight] = useState("0%");
   const [visitsInLast24h, setVisitsInLast24h] = useState(0);
   const [lastVisitTimeAgo, setLastVisitTimeAgo] = useState("");
+  const [showEvasionWarning, setShowEvasionWarning] = useState(false);
 
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const breatheDuration = 4000;
@@ -30,11 +21,11 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
 
     if (seconds < 60) return "just now";
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    if (minutes < 60) return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
     const days = Math.floor(hours / 24);
-    return `${days} day${days > 1 ? 's' : ''} ago`;
+    return `${days} day${days > 1 ? "s" : ""} ago`;
   };
 
   useEffect(() => {
@@ -42,15 +33,20 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
       try {
         const result = await chrome.storage.local.get(["siteHistory"]);
         const history = result.siteHistory || {};
-        const siteData: SiteHistory = history[siteName] || { visitTimestamps: [] };
+        const siteData: SiteHistory = history[siteName] || {
+          visitTimestamps: [],
+        };
         const now = Date.now();
         const oneDayAgo = now - 24 * 60 * 60 * 1000;
 
-        const recentVisits = siteData.visitTimestamps.filter(ts => ts > oneDayAgo);
+        const recentVisits = siteData.visitTimestamps.filter(
+          (ts) => ts > oneDayAgo
+        );
         setVisitsInLast24h(recentVisits.length + 1);
 
         if (siteData.visitTimestamps.length > 0) {
-          const lastVisit = siteData.visitTimestamps[siteData.visitTimestamps.length - 1];
+          const lastVisit =
+            siteData.visitTimestamps[siteData.visitTimestamps.length - 1];
           setLastVisitTimeAgo(formatTimeAgo(lastVisit));
         } else {
           setLastVisitTimeAgo("this is your first visit");
@@ -71,6 +67,70 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
 
     loadStats();
   }, [siteName]);
+
+  //Handle window blur/focus
+  const handleWindowBlur = useCallback(() => {
+    setIsPaused(true);
+    setShowEvasionWarning(true);
+    clearCurrentTimeout();
+  }, []);
+
+  const handleWindowFocus = useCallback(() => {
+    setIsPaused(false);
+    setShowEvasionWarning(false);
+  }, []);
+
+  const handleVisibilityChange = useCallback(() => {
+    if (document.hidden) setIsPaused(true);
+    else setIsPaused(false);
+  }, []);
+
+  useEffect(() => {
+    if (showEvasionWarning) {
+      window.close();
+    }
+  }, [showEvasionWarning]);
+
+  // Prevent keyboard shortcuts
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    const blockedKeys = ["F5", "F12", "Escape"];
+    const blockedCombos = [
+      event.ctrlKey && event.key === "r",
+      event.ctrlKey && event.key === "w",
+      event.ctrlKey && event.key === "t",
+      event.ctrlKey && event.shiftKey && event.key === "I",
+      event.altKey && event.key === "F4",
+    ];
+
+    if (
+      blockedKeys.includes(event.key) ||
+      blockedCombos.some((combo) => combo)
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      setShowEvasionWarning(true);
+      setTimeout(() => setShowEvasionWarning(false), 3000);
+    }
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("keydown", handleKeyDown, true);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [
+    handleVisibilityChange,
+    handleWindowBlur,
+    handleWindowFocus,
+    handleKeyDown,
+  ]);
 
   const clearCurrentTimeout = () => {
     if (timeoutRef.current) {
@@ -93,10 +153,7 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
 
   // Event listeners for pausing (Unchanged)
   const [isPaused, setIsPaused] = useState(false);
-  const handleVisibilityChange = useCallback(() => {
-    if (document.hidden) setIsPaused(true);
-    else setIsPaused(false);
-  }, []);
+
   useEffect(() => {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     const startTimer = setTimeout(startBreathingCycle, 1000);
@@ -106,7 +163,6 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
       clearTimeout(startTimer);
     };
   }, [startBreathingCycle, handleVisibilityChange]);
-
 
   const getMainMessage = () => {
     if (isPaused) return "Paused";
@@ -161,7 +217,7 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
           display: flex; align-items: center; justify-content: center;
           /* Fade out as the stats are revealed */
           transition: opacity 0.5s ease-in-out;
-          opacity: ${breathingPhase === 'complete' ? 0 : 1};
+          opacity: ${breathingPhase === "complete" ? 0 : 1};
         }
         .stats-and-decision-container {
           position: absolute; top: 0; left: 0;
@@ -220,12 +276,14 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
         <div className="waitful-content">
           <div className="main-message">{getMainMessage()}</div>
 
-          {breathingPhase === 'complete' && (
+          {breathingPhase === "complete" && (
             <div className="stats-and-decision-container">
               <div className="stats-container">
                 <div className="stat-item">
                   <span className="stat-value">{visitsInLast24h}</span>
-                  <span className="stat-label">visits to {siteName} in the last 24 hours</span>
+                  <span className="stat-label">
+                    visits to {siteName} in the last 24 hours
+                  </span>
                 </div>
                 <div className="stat-item">
                   <span className="stat-value">{lastVisitTimeAgo}</span>
@@ -237,7 +295,10 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
                 <button onClick={onComplete} className="decision-btn-primary">
                   I can wait, close this tab
                 </button>
-                <button onClick={() => onSkip("proceed")} className="continue-link-secondary">
+                <button
+                  onClick={() => onSkip("proceed")}
+                  className="continue-link-secondary"
+                >
                   Proceed to site
                 </button>
               </div>
@@ -251,8 +312,6 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
 
 export default BreathingOverlay;
 
-
 // this is fine...
 
 // make the stats/decison UI more calmly to help declutter the users mind to make informed decison
-
