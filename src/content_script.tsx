@@ -1,35 +1,19 @@
 import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import BreathingOverlay from './BreathingOverlay';
+import { Settings } from './types';
 
-// --- Step 1: Immediately inject placeholder to block page content ---
-// This runs at document_start before any site content is rendered
-const placeholder = document.createElement('div');
-placeholder.id = 'waitful-root-placeholder';
-placeholder.style.cssText = `
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: #F8FAFC;
-  z-index: 2147483647;
-  pointer-events: none;
-`;
-document.documentElement.appendChild(placeholder);
-
-// --- Step 2: Main execution logic ---
+// --- Main execution logic using Shadow DOM ---
 (async () => {
-  let reactRoot: Root | null = null;
-  let originalOverflow = '';
-
-  // Settings interface
-  interface Settings {
-    distractingSites: string[];
-    pauseDuration: number;
-    enablePauses: boolean;
+  // Define a single host element for our UI
+  const HOST_ID = 'waitful-shadow-host';
+  let hostElement = document.getElementById(HOST_ID);
+  
+  // Clean up any old instances first
+  if (hostElement) {
+    hostElement.remove();
   }
-
+  
   // Load settings from Chrome storage
   const loadSettings = async (): Promise<Settings> => {
     const result = await chrome.storage.sync.get([
@@ -38,16 +22,14 @@ document.documentElement.appendChild(placeholder);
       'enablePauses',
     ]);
     return {
+      ...result as Settings,
       distractingSites: result.distractingSites || [],
       pauseDuration: result.pauseDuration || 7,
-      enablePauses: result.enablePauses !== false,
     };
   };
 
   // Check if current site should show pause
   const shouldShowPause = (settings: Settings): boolean => {
-    if (!settings.enablePauses) return false;
-
     const currentDomain = window.location.hostname.replace('www.', '');
     return settings.distractingSites.some((siteDomain) =>
       currentDomain.includes(siteDomain) || siteDomain.includes(currentDomain)
@@ -58,97 +40,82 @@ document.documentElement.appendChild(placeholder);
   const logPauseEvent = async (action: string, data: any) => {
     const timestamp = Date.now();
     const today = new Date().toDateString();
-
     const result = await chrome.storage.local.get(['pauseLogs']);
     const logs = result.pauseLogs || {};
-
     if (!logs[today]) logs[today] = [];
     logs[today].push({ timestamp, action, ...data });
-
     await chrome.storage.local.set({ pauseLogs: logs });
-  };
-
-  // Remove overlay and cleanup
-  const removeOverlay = async () => {
-    if (reactRoot) {
-      reactRoot.unmount();
-      reactRoot = null;
-    }
-    if (placeholder.parentNode) {
-      placeholder.remove();
-    }
-    // Restore page scroll
-    document.documentElement.style.overflow = originalOverflow;
-  };
-
-  // Handle overlay completion (user chose to wait)
-  const handleOverlayComplete = async () => {
-    await removeOverlay();
-    await logPauseEvent('completed', { domain: window.location.hostname });
-
-    chrome.runtime.sendMessage({
-      type: 'PAUSE_COMPLETED',
-      domain: window.location.hostname,
-      url: window.location.href,
-    });
-  };
-
-  // Handle overlay skip (user chose to proceed)
-  const handleOverlaySkip = async (reason: string) => {
-    await removeOverlay();
-    await logPauseEvent('skipped', {
-      domain: window.location.hostname,
-      reason,
-    });
-
-    chrome.runtime.sendMessage({
-      type: 'PAUSE_SKIPPED',
-      domain: window.location.hostname,
-      url: window.location.href,
-      reason,
-    });
   };
 
   // Main execution
   const settings = await loadSettings();
-  const currentDomain = window.location.hostname.replace('www.', '');
-
-  if (shouldShowPause(settings)) {
-    // --- Step 3: Hydrate full React UI into placeholder ---
-    
-    // Prevent page scroll and make overlay interactive
-    originalOverflow = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
-    placeholder.style.pointerEvents = 'auto';
-
-    // Log pause initiation
-    await logPauseEvent('initiated', { 
-      domain: currentDomain, 
-      duration: settings.pauseDuration 
-    });
-
-    // Render React overlay
-    reactRoot = createRoot(placeholder);
-    reactRoot.render(
-      <React.StrictMode>
-        <BreathingOverlay
-          duration={settings.pauseDuration}
-          siteName={currentDomain}
-          onComplete={handleOverlayComplete}
-          onSkip={handleOverlaySkip}
-        />
-      </React.StrictMode>
-    );
-  } else {
-    // --- Step 4: Not a distracting site, remove placeholder ---
-    await removeOverlay();
+  if (!shouldShowPause(settings)) {
+    return; // Not a distracting site, do nothing.
   }
 
-  // Listen for settings changes
-  chrome.storage.onChanged.addListener((changes) => {
-    if (changes.distractingSites || changes.pauseDuration || changes.enablePauses) {
-      console.log('Waitful: Settings changed, will apply on next page load.');
+  // --- Step 1: Create the Host and Shadow Root ---
+  hostElement = document.createElement('div');
+  hostElement.id = HOST_ID;
+  document.documentElement.appendChild(hostElement);
+
+  const shadowRoot = hostElement.attachShadow({ mode: 'open' });
+  
+  // Create the container for the React app inside the Shadow DOM
+  const appContainer = document.createElement('div');
+  shadowRoot.appendChild(appContainer);
+  
+  // We need to either link a stylesheet or inject styles directly into the shadow DOM.
+  // For portability, injecting a style tag is robust.
+  const styleElement = document.createElement('style');
+  // You can link to a CSS file in your extension package or define styles here.
+  // For this example, we'll assume BreathingOverlay provides its own styles.
+  shadowRoot.appendChild(styleElement);
+
+
+  // --- Step 2: Define Handlers and Render the App ---
+  let reactRoot: Root | null = createRoot(appContainer);
+  let originalOverflow = document.documentElement.style.overflow;
+
+  // Prevent page scroll
+  document.documentElement.style.overflow = 'hidden';
+
+  const cleanup = () => {
+    if (reactRoot) {
+      reactRoot.unmount();
+      reactRoot = null;
     }
+    if (hostElement) {
+      hostElement.remove();
+    }
+    document.documentElement.style.overflow = originalOverflow;
+  };
+
+  const handleOverlayComplete = async () => {
+    await logPauseEvent('completed', { domain: window.location.hostname });
+    chrome.runtime.sendMessage({ type: 'PAUSE_COMPLETED' });
+    cleanup();
+  };
+
+  const handleOverlaySkip = async (reason: string) => {
+    await logPauseEvent('skipped', { domain: window.location.hostname, reason });
+    chrome.runtime.sendMessage({ type: 'PAUSE_SKIPPED', reason });
+    cleanup();
+  };
+  
+  await logPauseEvent('initiated', { 
+    domain: window.location.hostname, 
+    duration: settings.pauseDuration 
   });
+
+  reactRoot.render(
+    <React.StrictMode>
+      <BreathingOverlay
+        duration={settings.pauseDuration}
+        siteName={window.location.hostname.replace('www.', '')}
+        onComplete={handleOverlayComplete}
+        onSkip={handleOverlaySkip}
+      />
+    </React.StrictMode>
+  );
 
 })().catch(console.error);

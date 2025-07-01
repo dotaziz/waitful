@@ -30,8 +30,8 @@ const Popup = () => {
           // Check if current site is in distracting list
           const isDist = savedSites.some(
             (site: DistractingSite) =>
-              domain.includes(site.domain) ||
-              site.domain.includes(domain.replace("www.", ""))
+              domain?.includes(site?.domain) ||
+              site?.domain?.includes(domain?.replace("www.", ""))
           );
           setIsCurrentSiteDistracting(isDist);
         });

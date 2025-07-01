@@ -21,17 +21,17 @@ module.exports = {
         return chunk.name !== "background";
       },
     },
-  },
-  module: {
+    },
+    module: {
     rules: [
       {
-        test: /\.tsx?$/,
-        use: "ts-loader",
-        exclude: /node_modules/,
+      test: /\.(ts|tsx)$/,
+      use: "ts-loader",
+      exclude: /node_modules/,
       },
       {
-        test: /\.s?css$/,
-        use: ["style-loader", "css-loader", "postcss-loader"], // add "postcss-loader" to CSS loaders
+      test: /\.s?css$/,
+      use: ["style-loader", "css-loader", "postcss-loader"], // add "postcss-loader" to CSS loaders
         exclude: /\.module\.s?(c|a)ss$/,
       },
     ],
