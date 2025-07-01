@@ -1,57 +1,71 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-
-interface BreathingOverlayProps {
-  duration: number;
-  siteName: string;
-  onComplete: () => void;
-  onSkip: (reason: string) => void;
-}
-
-interface SiteStats {
-  attempts: number;
-  lastAttempt: string;
-}
+import { BreathingOverlayProps, SiteHistory } from "./types";
 
 const BreathingOverlay = (props: BreathingOverlayProps) => {
   const { duration, siteName, onComplete, onSkip } = props;
   const [breathingPhase, setBreathingPhase] = useState<
-    "ready" | "inhale" | "exhale" | "complete"
+    "ready" | "inhale" | "complete"
   >("ready");
   const [fillHeight, setFillHeight] = useState("0%");
-  const [showDecision, setShowDecision] = useState(false);
-  const [siteStats, setSiteStats] = useState<SiteStats>({
-    attempts: 0,
-    lastAttempt: "",
-  });
-  const [isPaused, setIsPaused] = useState(false);
+  const [visitsInLast24h, setVisitsInLast24h] = useState(0);
+  const [lastVisitTimeAgo, setLastVisitTimeAgo] = useState("");
   const [showEvasionWarning, setShowEvasionWarning] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+
 
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const breatheDuration = 4000;
 
+  const formatTimeAgo = (timestamp: number): string => {
+    const now = Date.now();
+    const seconds = Math.floor((now - timestamp) / 1000);
+
+    if (seconds < 60) return "just now";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} minute${minutes > 1 ? "s" : ""}`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""}`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days > 1 ? "s" : ""}`;
+  };
+
   useEffect(() => {
     const loadStats = async () => {
       try {
-        const result = await chrome.storage.local.get(["siteStats"]);
-        const stats = result.siteStats || {};
-        const currentSiteStats = stats[siteName] || {
-          attempts: 0,
-          lastAttempt: "",
+        const result = await chrome.storage.local.get(["siteHistory"]);
+        const history = result.siteHistory || {};
+        const siteData: SiteHistory = history[siteName] || {
+          visitTimestamps: [],
         };
-        const updatedStats = {
-          ...stats,
-          [siteName]: {
-            attempts: currentSiteStats.attempts + 1,
-            lastAttempt: new Date().toLocaleString(),
-          },
+        const now = Date.now();
+        const oneDayAgo = now - 24 * 60 * 60 * 1000;
+
+        const recentVisits = siteData.visitTimestamps.filter(
+          (ts) => ts > oneDayAgo
+        );
+        setVisitsInLast24h(recentVisits.length + 1);
+
+        if (siteData.visitTimestamps.length > 0) {
+          const lastVisit =
+            siteData.visitTimestamps[siteData.visitTimestamps.length - 1];
+          setLastVisitTimeAgo(formatTimeAgo(lastVisit));
+        } else {
+          setLastVisitTimeAgo("This is your first visit");
+        }
+
+        const updatedTimestamps = [...siteData.visitTimestamps, now];
+        const updatedHistory = {
+          ...history,
+          [siteName]: { visitTimestamps: updatedTimestamps },
         };
-        await chrome.storage.local.set({ siteStats: updatedStats });
-        setSiteStats(updatedStats[siteName]);
+        await chrome.storage.local.set({ siteHistory: updatedHistory });
       } catch (error) {
-        console.log("Could not load stats:", error);
-        setSiteStats({ attempts: 1, lastAttempt: new Date().toLocaleString() });
+        console.log("Could not load site history:", error);
+        setVisitsInLast24h(1);
+        setLastVisitTimeAgo("this is your first visit");
       }
     };
+
     loadStats();
   }, [siteName]);
 
@@ -61,33 +75,6 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
     }
   };
 
-  const startBreathingCycle = useCallback(() => {
-    if (isPaused) return;
-
-    setBreathingPhase("inhale");
-    setFillHeight("100%");
-
-    timeoutRef.current = setTimeout(() => {
-      setBreathingPhase("exhale");
-      setFillHeight("0%");
-
-      timeoutRef.current = setTimeout(() => {
-        setBreathingPhase("complete");
-        setShowDecision(true);
-      }, breatheDuration);
-    }, breatheDuration);
-  }, [isPaused]);
-
-  const handleVisibilityChange = useCallback(() => {
-    if (document.hidden) {
-      setIsPaused(true);
-      setShowEvasionWarning(true);
-      clearCurrentTimeout();
-    } else {
-      setIsPaused(false);
-      setShowEvasionWarning(false);
-    }
-  }, []);
 
   const handleWindowBlur = useCallback(() => {
     setIsPaused(true);
@@ -100,12 +87,27 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
     setShowEvasionWarning(false);
   }, []);
 
+
+  const handleVisibilityChange = useCallback(() => {
+    if (document.hidden) {
+        setIsPaused(true);
+        setShowEvasionWarning(true);
+        clearCurrentTimeout();
+    }
+  }, []);
+
+
+  useEffect(() => {
+    if (showEvasionWarning) {
+      // Immediately close the tab as a consequence of evasion
+      window.close();
+    }
+  }, [showEvasionWarning]);
+
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     const blockedKeys = ["F5", "F12", "Escape"];
     const blockedCombos = [
-      event.ctrlKey && event.key === "r",
-      event.ctrlKey && event.key === "w",
-      event.ctrlKey && event.key === "t",
+      event.ctrlKey && (event.key === "r" || event.key === "w" || event.key === "t"),
       event.ctrlKey && event.shiftKey && event.key === "I",
       event.altKey && event.key === "F4",
     ];
@@ -117,8 +119,18 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
       event.preventDefault();
       event.stopPropagation();
       setShowEvasionWarning(true);
-      setTimeout(() => setShowEvasionWarning(false), 3000);
     }
+  }, []);
+
+
+  const startBreathingCycle = useCallback(() => {
+    setBreathingPhase("inhale");
+    setFillHeight("100%");
+
+    timeoutRef.current = setTimeout(() => {
+      setBreathingPhase("complete");
+      setFillHeight("0%");
+    }, breatheDuration);
   }, []);
 
   useEffect(() => {
@@ -126,7 +138,9 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
     window.addEventListener("blur", handleWindowBlur);
     window.addEventListener("focus", handleWindowFocus);
     document.addEventListener("keydown", handleKeyDown, true);
+
     const startTimer = setTimeout(startBreathingCycle, 1000);
+
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
@@ -144,188 +158,201 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
   ]);
 
   const getMainMessage = () => {
-    if (isPaused) return "Paused. Bring your focus back to this screen.";
+    if (isPaused) return "Paused";
     switch (breathingPhase) {
       case "ready":
-        return "An intentional pause from Waitful.";
       case "inhale":
-        return "Breathe in and fill your lungs.";
-      case "exhale":
-        return "Gently release the breath.";
-      case "complete":
-        return "What is your intention now?";
+        return "It's time to take a deep breath.";
       default:
-        return "";
+        return ""; // Message is handled by the stats view now
     }
-  };
-
-  const getStatsMessage = () => {
-    if (siteStats.attempts <= 1) {
-      return `This is your first intentional pause for ${siteName}.`;
-    }
-    return `You've paused for ${siteName} ${siteStats.attempts} times. Last visit: ${siteStats.lastAttempt}`;
   };
 
   return (
     <>
       <style>{`
+        /* AGGRESSIVE RESET & DEFINITIONS */
+        .waitful-overlay, .waitful-overlay * {
+          all: initial !important; /* Resets everything */
+          box-sizing: border-box !important;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+          -webkit-font-smoothing: antialiased !important;
+          -moz-osx-font-smoothing: grayscale !important;
+        }
+
         :root {
-          --brand-bg: #F8FAFC;
-          --brand-primary: #334155;
-          --brand-secondary: #64748B;
-          --brand-accent-light: #E0F2FE;
-          --brand-accent-medium: #B3E5FC;
-          --brand-border: #E2E8F0;
+          --brand-bg: #F8FAFC !important;
+          --brand-primary: #1E293B !important;
+          --brand-secondary: #64748B !important;
+          --brand-accent-light: #E0F2FE !important;
+          --brand-accent-medium: #B3E5FC !important;
         }
+
+        /* OVERLAY STYLES */
         .waitful-overlay {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          background: var(--brand-bg);
-          color: var(--brand-primary);
-          position: fixed;
-          top: 0; left: 0;
-          width: 100vw; height: 100vh;
-          z-index: 2147483647;
-          user-select: none;
-          overflow: hidden;
+          background: var(--brand-bg) !important;
+          color: var(--brand-primary) !important;
+          position: fixed !important;
+          top: 0 !important; left: 0 !important;
+          width: 100vw !important; height: 100vh !important;
+          z-index: 2147483647 !important;
+          user-select: none !important;
+          overflow: hidden !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          text-align: center !important;
         }
+
+        /* FILL ANIMATION STYLES */
         .waitful-fill {
-          position: absolute;
-          bottom: 0; left: 0; right: 0;
-          background: linear-gradient(180deg, var(--brand-accent-light) 0%, var(--brand-accent-medium) 100%);
-          height: ${fillHeight};
-          z-index: 1;
-          /* A smoother bezier curve for a more natural feel */
-          transition: height ${breatheDuration}ms cubic-bezier(0.45, 0, 0.55, 1);
+          position: absolute !important;
+          bottom: 0 !important; left: 0 !important; right: 0 !important;
+          background: linear-gradient(180deg, var(--brand-accent-light) 0%, var(--brand-accent-medium) 100%) !important;
+          height: ${fillHeight} !important;
+          z-index: 3 !important; /* Must be higher than content */
+          transition: height ${breatheDuration}ms cubic-bezier(0.45, 0, 0.55, 1) !important;
         }
-        .waitful-content {
-          position: relative;
-          z-index: 2;
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          padding: 2rem;
+
+        /* CONTENT CONTAINER STYLES */
+        .waitful-content-wrapper {
+          position: relative !important;
+          z-index: 2 !important; /* Lower than fill */
+          height: 100% !important;
+          width: 100% !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
+          padding: 2rem !important;
         }
-        .fade-in {
-          animation: fadeIn 1s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
+
+        /* INITIAL MESSAGE STYLES */
         .main-message {
-          font-size: 2.5rem;
-          font-weight: 300;
-          line-height: 1.3;
-          max-width: 600px;
-          margin-bottom: 2rem;
+          font-size: 2.25rem !important;
+          font-weight: 300 !important;
+          max-width: 500px !important;
+          min-height: 80px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          transition: opacity 0.5s ease-in-out !important;
+          opacity: ${breathingPhase === "complete" ? 0 : 1} !important;
+          position: absolute !important; /* Keep it centered */
+          z-index: 1 !important;
         }
-        .instruction-text {
-          position: absolute;
-          bottom: 5rem;
-          font-size: 1.125rem;
-          color: var(--brand-secondary);
-          transition: opacity 0.5s ease-in-out;
-          opacity: ${
-            breathingPhase === "inhale" || breathingPhase === "exhale" ? 1 : 0
-          };
+
+        /* CALM STATS & DECISION UI STYLES */
+        .calm-container {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 3.5rem !important; /* Increased gap for more calm space */
+          max-width: 480px !important;
+          width: 100% !important;
+          padding: 1rem !important;
+          /* This container is always present but only visible when the fill reveals it */
         }
-        .stats-message {
-          font-size: 1rem;
-          color: var(--brand-secondary);
-          max-width: 500px;
-          line-height: 1.5;
-          text-align: center;
-          /* Use opacity to fade in/out to prevent layout shift */
-          opacity: ${breathingPhase === "exhale" && !isPaused ? 1 : 0};
-          transition: opacity 0.5s ease-in-out;
+
+        .stats-group {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 1.5rem !important;
         }
-        .decision-container {
-          position: absolute;
-          left: 50%;
-          bottom: 10vh;
-          transform: translateX(-50%);
-          width: 100%;
-          max-width: 420px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 1rem;
+
+        .stat-item {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
         }
-        .decision-btn {
-          width: 100%;
-          padding: 16px;
-          background: var(--brand-primary);
-          color: white;
-          font-weight: 600;
-          font-size: 1.1rem;
-          border-radius: 1rem;
-          border: none;
-          cursor: pointer;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+
+        .stat-value {
+          font-size: 2.5rem !important; /* Slightly smaller for a calmer feel */
+          font-weight: 600 !important;
+          line-height: 1 !important;
         }
-        .decision-btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+
+        .stat-label {
+          font-size: 1rem !important;
+          color: var(--brand-secondary) !important;
+          margin-top: 0.5rem !important;
         }
-        .continue-link {
-          color: var(--brand-secondary);
-          font-size: 1rem;
-          font-weight: 500;
-          background: none;
-          border: none;
-          cursor: pointer;
-          padding: 0.5rem;
+
+        .decision-group {
+          width: 100% !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          gap: 1rem !important;
         }
-        .continue-link:hover {
-          color: var(--brand-primary);
+
+        .decision-btn-primary {
+          width: 100% !important;
+          padding: 16px !important;
+          background: var(--brand-primary) !important;
+          color: white !important;
+          font-weight: 600 !important;
+          font-size: 1.1rem !important;
+          border-radius: 1rem !important;
+          border: none !important;
+          cursor: pointer !important;
+          transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1) !important;
         }
-        .site-tag {
-          position: absolute;
-          top: 2rem;
-          left: 2rem;
-          background: white;
-          padding: 0.75rem 1.25rem;
-          border-radius: 9999px;
-          font-size: 0.875rem;
-          color: var(--brand-primary);
-          font-weight: 500;
-          border: 1px solid var(--brand-border);
-          z-index: 3;
+
+        .decision-btn-primary:hover {
+          transform: translateY(-2px) !important;
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15) !important;
+        }
+
+        .continue-link-secondary {
+          color: var(--brand-secondary) !important;
+          font-size: 0.9rem !important;
+          font-weight: 500 !important; /* Slightly bolder for clarity */
+          background: none !important;
+          border: none !important;
+          cursor: pointer !important;
+          padding: 0.5rem !important;
+          text-decoration: none !important;
+        }
+
+        .continue-link-secondary:hover {
+          text-decoration: underline !important;
         }
       `}</style>
 
       <div className="waitful-overlay">
         <div className="waitful-fill" />
-        <div className="site-tag">🌐 {siteName}</div>
+        <div className="waitful-content-wrapper">
+          <div className="main-message">{getMainMessage()}</div>
 
-        <div className="waitful-content">
-          <div className="main-message fade-in">{getMainMessage()}</div>
+          {breathingPhase === "complete" && (
+            <div className="calm-container">
+              <div className="stats-group">
+                <div className="stat-item">
+                  <span className="stat-value">{visitsInLast24h}</span>
+                  <span className="stat-label">
+                    visits to {siteName} in the last 24 hours
+                  </span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-value">{lastVisitTimeAgo}</span>
+                  <span className="stat-label">since your last visit</span>
+                </div>
+              </div>
 
-          <div className="stats-message">{getStatsMessage()}</div>
-
-          <div className="instruction-text">
-            {isPaused
-              ? ""
-              : breathingPhase === "inhale"
-              ? "Feel the pause..."
-              : "Gently release..."}
-          </div>
-
-          {showDecision && (
-            <div className="decision-container fade-in">
-              <button onClick={onComplete} className="decision-btn">
-                I can wait, close this tab
-              </button>
-              <button
-                onClick={() => onSkip("proceed")}
-                className="continue-link"
-              >
-                Proceed to site
-              </button>
+              <div className="decision-group">
+                <button onClick={onComplete} className="decision-btn-primary">
+                  I can wait, close this tab
+                </button>
+                <button
+                  onClick={() => onSkip("proceed")}
+                  className="continue-link-secondary"
+                >
+                  Proceed to {siteName}
+                </button>
+              </div>
             </div>
           )}
         </div>
