@@ -71,7 +71,7 @@ const WaitfulLogo = ({ size = 32 }: { size?: number }) => (
 
 const Options = () => {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
-  const [activeTab, setActiveTab] = useState('sites');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -170,10 +170,10 @@ const Options = () => {
   const renderContent = () => {
     if (loading) {
       return (
-        <div className="flex items-center justify-center h-64">
-          <div className="flex items-center gap-2 text-gray-500">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Loading settings...</span>
+        <div className="flex items-center justify-center h-96">
+          <div className="flex items-center gap-3 text-gray-500">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <span className="text-lg">Loading settings...</span>
           </div>
         </div>
       );
@@ -193,21 +193,21 @@ const Options = () => {
       case 'privacy':
         return <Privacy settings={settings} updateSettings={updateSettings} />;
       default:
-        return <Sites settings={settings} updateSettings={updateSettings} />;
+        return <Dashboard />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="h-screen flex flex-col bg-gray-50">
+      {/* Fixed Header */}
+      <header className="bg-white border-b border-gray-200 flex-shrink-0 z-10">
+        <div className="px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
               <WaitfulLogo size={32} />
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">Waitful</h1>
-                <p className="text-sm text-gray-500">Mindful browsing settings</p>
+                <p className="text-sm text-gray-500">Mindful browsing dashboard</p>
               </div>
             </div>
             
@@ -216,22 +216,23 @@ const Options = () => {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex gap-8">
-          {/* Enhanced Sidebar */}
-          <div className="w-72 flex-shrink-0">
-            <nav className="space-y-1">
+      {/* Dashboard Layout */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Fixed Sidebar */}
+        <div className="w-80 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
+          <div className="flex-1 overflow-y-auto p-6">
+            <nav className="space-y-2">
               {sidebarItems.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full group flex items-start gap-3 px-4 py-3 text-left rounded-xl transition-all duration-200 ${
+                  className={`w-full group flex items-center gap-3 px-4 py-3 text-left rounded-lg transition-all duration-200 ${
                     activeTab === item.id
                       ? 'bg-blue-50 border border-blue-200 text-blue-700 shadow-sm'
-                      : 'text-gray-700 hover:bg-gray-50 hover:border-gray-200 border border-transparent'
+                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900 border border-transparent hover:border-gray-200'
                   }`}
                 >
-                  <div className={`mt-0.5 transition-colors ${
+                  <div className={`transition-colors ${
                     activeTab === item.id ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'
                   }`}>
                     {item.icon}
@@ -251,41 +252,48 @@ const Options = () => {
                   
                   {/* Active indicator */}
                   {activeTab === item.id && (
-                    <div className="w-1 h-6 bg-blue-600 rounded-full" />
+                    <div className="w-1 h-8 bg-blue-600 rounded-full" />
                   )}
                 </button>
               ))}
             </nav>
-            
-            {/* Quick Stats Card */}
-            <div className="mt-8 p-4 bg-white rounded-xl border border-gray-200">
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Stats</h3>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
+          </div>
+          
+          {/* Quick Stats Card - Fixed at bottom of sidebar */}
+          <div className="p-6 border-t border-gray-100">
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-gray-600" />
+                Quick Stats
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center">
                   <span className="text-gray-600">Blocked sites</span>
-                  <span className="font-medium text-gray-900">
+                  <span className="font-semibold text-gray-900 bg-white px-2 py-1 rounded text-xs">
                     {settings.distractingSites?.length || 0}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-gray-600">Focus time</span>
-                  <span className="font-medium text-gray-900">
+                  <span className="font-semibold text-gray-900 bg-white px-2 py-1 rounded text-xs">
                     {settings.defaultFocusTime}m
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-gray-600">Pause duration</span>
-                  <span className="font-medium text-gray-900">
+                  <span className="font-semibold text-gray-900 bg-white px-2 py-1 rounded text-xs">
                     {settings.pauseDuration}s
                   </span>
                 </div>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Main Content */}
-          <div className="flex-1 min-w-0">
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-10">
+        {/* Scrollable Main Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-8">
+            <div className="max-w-6xl mx-auto">
               {renderContent()}
             </div>
           </div>
