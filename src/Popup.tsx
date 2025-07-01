@@ -15,6 +15,7 @@ const Popup = () => {
   );
   const [isCurrentSiteDistracting, setIsCurrentSiteDistracting] =
     useState(false);
+  const [focusCountdown, setFocusCountdown] = useState<number | null>(null);
 
   useEffect(() => {
     // chrome.action.setBadgeText({ text: '10' });
@@ -48,15 +49,49 @@ const Popup = () => {
     });
   }, []);
 
+  useEffect(() => {
+    if (isFocusMode) {
+      const interval = setInterval(() => {
+        chrome.runtime.sendMessage({ type: 'GET_REMAINING_TIME' }, (response) => {
+          const remainingTime = response.remainingTime || 0;
+
+          if (remainingTime <= 0) {
+            clearInterval(interval);
+            setFocusCountdown(null);
+            setIsFocusMode(false);
+            chrome.action.setBadgeText({ text: '' });
+          } else {
+            setFocusCountdown(remainingTime);
+            const minutes = Math.floor(remainingTime / 60);
+            const seconds = remainingTime % 60;
+            chrome.action.setBadgeText({ text: `${minutes}:${seconds < 10 ? '0' : ''}${seconds}` });
+          }
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    } else {
+      chrome.action.setBadgeText({ text: '' });
+    }
+  }, [isFocusMode]);
+
   const startFocusMode = () => {
     setIsFocusMode(true);
-    chrome.storage.local.set({ isFocusMode: true, focusDuration: focusTime });
-
-    chrome.runtime.sendMessage({
-      type: "START_FOCUS_MODE",
-      duration: focusTime,
-    });
+    chrome.runtime.sendMessage({ type: 'START_FOCUS_MODE', duration: focusTime * 60 });
   };
+
+  const cancelFocusMode = () => {
+    setIsFocusMode(false);
+    setFocusCountdown(null);
+    chrome.runtime.sendMessage({ type: 'CANCEL_FOCUS_MODE' });
+  };
+
+  useEffect(() => {
+    if (focusCountdown === 0) {
+      alert('Focus mode is complete!');
+      cancelFocusMode();
+    }
+  }, [focusCountdown]);
 
   const toggleDistractingSite = () => {
     if (!currentURL) return;
@@ -97,6 +132,32 @@ const Popup = () => {
   };
 
   const quickFocusTimes = [15, 25, 45, 60];
+
+  const renderFocusCountdown = () => {
+    if (!focusCountdown) return null;
+
+    const minutes = Math.floor(focusCountdown / 60);
+    const seconds = focusCountdown % 60;
+
+    return (
+      <div className="text-center text-sm text-slate-600 dark:text-slate-400">
+        Time remaining: {minutes}m {seconds}s
+      </div>
+    );
+  };
+
+  const renderCancelButton = () => {
+    if (!isFocusMode) return null;
+
+    return (
+      <button
+        onClick={cancelFocusMode}
+        className="w-full py-2 px-4 rounded-lg font-medium text-sm bg-red-500 text-white hover:bg-red-600 transition-all"
+      >
+        Cancel Focus Mode
+      </button>
+    );
+  };
 
   return (
     <div className="w-80 bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
@@ -213,6 +274,9 @@ const Popup = () => {
               "Start Focus Session"
             )}
           </button>
+
+          {renderFocusCountdown()}
+          {renderCancelButton()}
         </div>
 
         {/* Daily Usage */}

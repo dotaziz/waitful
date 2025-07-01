@@ -12,7 +12,6 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
   const [showEvasionWarning, setShowEvasionWarning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
-
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const breatheDuration = 4000;
 
@@ -75,7 +74,6 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
     }
   };
 
-
   const handleWindowBlur = useCallback(() => {
     setIsPaused(true);
     setShowEvasionWarning(true);
@@ -87,15 +85,13 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
     setShowEvasionWarning(false);
   }, []);
 
-
   const handleVisibilityChange = useCallback(() => {
     if (document.hidden) {
-        setIsPaused(true);
-        setShowEvasionWarning(true);
-        clearCurrentTimeout();
+      setIsPaused(true);
+      setShowEvasionWarning(true);
+      clearCurrentTimeout();
     }
   }, []);
-
 
   useEffect(() => {
     if (showEvasionWarning) {
@@ -107,7 +103,8 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     const blockedKeys = ["F5", "F12", "Escape"];
     const blockedCombos = [
-      event.ctrlKey && (event.key === "r" || event.key === "w" || event.key === "t"),
+      event.ctrlKey &&
+        (event.key === "r" || event.key === "w" || event.key === "t"),
       event.ctrlKey && event.shiftKey && event.key === "I",
       event.altKey && event.key === "F4",
     ];
@@ -121,7 +118,6 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
       setShowEvasionWarning(true);
     }
   }, []);
-
 
   const startBreathingCycle = useCallback(() => {
     setBreathingPhase("inhale");
@@ -167,6 +163,25 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
         return ""; // Message is handled by the stats view now
     }
   };
+
+  useEffect(() => {
+    if (breathingPhase === "complete") {
+      chrome.runtime.sendMessage({ type: "GET_REMAINING_TIME" }, (response) => {
+        const remainingTime = response.remainingTime || 0;
+        if (remainingTime > 0) {
+          alert(
+            `Focus mode is active. Time remaining: ${
+              remainingTime >= 3600
+                ? `${Math.floor(remainingTime / 3600)}h`
+                : remainingTime >= 60
+                ? `${Math.floor(remainingTime / 60)}m`
+                : `${remainingTime}s`
+            }`
+          );
+        }
+      });
+    }
+  }, [breathingPhase]);
 
   return (
     <>
@@ -344,7 +359,7 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
               </div>
 
               <div id="decision-group">
-                <button onClick={onComplete} id="decision-btn-primary">
+                <button onClick={window.close} id="decision-btn-primary">
                   I can wait, close this tab
                 </button>
                 <button

@@ -57,9 +57,11 @@ const Stats = () => {
   });
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('7d');
+  const [browsingAnalytics, setBrowsingAnalytics] = useState<{ siteVisits: { [siteName: string]: number } } | null>(null);
 
   useEffect(() => {
     loadStatsData();
+    loadBrowsingAnalytics();
   }, [timeRange]);
 
   const loadStatsData = async () => {
@@ -321,6 +323,50 @@ const Stats = () => {
 
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
 
+  const loadBrowsingAnalytics = async () => {
+    try {
+      const historyItems = await new Promise<chrome.history.HistoryItem[]>((resolve, reject) => {
+        chrome.history.search({ text: '', maxResults: 1000 }, (results) => {
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve(results);
+          }
+        });
+      });
+
+      const siteVisits: { [siteName: string]: number } = {};
+
+      historyItems.forEach((item: chrome.history.HistoryItem) => {
+        if (item.url) {
+          const url = new URL(item.url);
+          const domain = url.hostname;
+          siteVisits[domain] = (siteVisits[domain] || 0) + 1;
+        }
+      });
+
+      setBrowsingAnalytics({ siteVisits });
+    } catch (error) {
+      console.error('Failed to load browsing analytics:', error);
+    }
+  };
+
+  const renderBrowsingAnalytics = () => {
+    if (!browsingAnalytics) return <p>Loading browsing analytics...</p>;
+
+    const sortedSites = Object.entries(browsingAnalytics.siteVisits).sort((a, b) => b[1] - a[1]);
+
+    return (
+      <BarChart width={600} height={300} data={sortedSites.map(([site, visits]) => ({ site, visits }))}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="site" />
+        <YAxis />
+        <Tooltip />
+        <Bar dataKey="visits" fill="#8884d8" />
+      </BarChart>
+    );
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -546,6 +592,12 @@ const Stats = () => {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* Browsing Analytics */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-6">Browsing Analytics</h2>
+        {renderBrowsingAnalytics()}
       </div>
 
       {/* Empty State */}

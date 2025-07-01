@@ -4,6 +4,43 @@ import React, { useEffect, useState } from "react";
 // Goals Component
 const Goals= (props: SettingsProps) => {
     const {settings, updateSettings} = props;
+    const [goalProgress, setGoalProgress] = useState<{ daily: number; weekly: number }>({ daily: 0, weekly: 0 });
+
+    useEffect(() => {
+      loadGoalProgress();
+    }, []);
+
+    const loadGoalProgress = async () => {
+      try {
+        const result = await chrome.storage.local.get(['focusSessions']);
+        const focusSessions: { timestamp: number; completed: boolean }[] = result.focusSessions || [];
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - today.getDay());
+
+        const dailySessions = focusSessions.filter(session => session.timestamp >= today.getTime() && session.completed).length;
+        const weeklySessions = focusSessions.filter(session => session.timestamp >= weekStart.getTime() && session.completed).length;
+
+        setGoalProgress({ daily: dailySessions, weekly: weeklySessions });
+      } catch (error) {
+        console.error('Failed to load goal progress:', error);
+      }
+    };
+
+    const renderGoalAcknowledgment = () => {
+      const dailyGoalMet = goalProgress.daily >= settings.focusGoal;
+      const weeklyGoalMet = goalProgress.weekly >= settings.weeklyGoal;
+
+      return (
+        <div className="space-y-4">
+          {dailyGoalMet && <p className="text-green-600">🎉 Daily goal achieved!</p>}
+          {weeklyGoalMet && <p className="text-green-600">🎉 Weekly goal achieved!</p>}
+        </div>
+      );
+    };
+
   return (
     <div className="space-y-6">
       <div>
@@ -58,16 +95,17 @@ const Goals= (props: SettingsProps) => {
           <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">Current Progress</h3>
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">0/4</div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{goalProgress.daily}/{settings.focusGoal}</div>
               <div className="text-sm text-blue-700 dark:text-blue-300">Today's Sessions</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">0/7</div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{goalProgress.weekly}/{settings.weeklyGoal}</div>
               <div className="text-sm text-blue-700 dark:text-blue-300">This Week</div>
             </div>
           </div>
         </div>
       </div>
+      {renderGoalAcknowledgment()}
     </div>
   );
 };

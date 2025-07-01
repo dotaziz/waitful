@@ -13,6 +13,9 @@ export interface Settings {
   focusGoal: number;
   enableAnalytics: boolean;
   shareData: boolean;
+  browsingAnalytics?: BrowsingAnalytics;
+  goals?: Goal[];
+  schedule?: Schedule;
 }
 
 
@@ -152,4 +155,22 @@ export interface DailyStats {
   pauseCount: number;
   completionRate: number;
   topSites: string[];
+}
+
+export interface BrowsingAnalytics {
+  siteVisits: { [siteName: string]: number };
+  lastUpdated: number;
+}
+
+export interface Goal {
+  description: string;
+  target: number;
+  progress: number;
+  achieved: boolean;
+}
+
+export interface Schedule {
+  startTime: string;
+  endTime: string;
+  activeDays: string[];
 }
