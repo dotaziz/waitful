@@ -172,7 +172,7 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
     <>
       <style>{`
         /* AGGRESSIVE RESET & DEFINITIONS */
-        .waitful-overlay, .waitful-overlay * {
+        #waitful-overlay, #waitful-overlay * {
           all: initial !important; /* Resets everything */
           box-sizing: border-box !important;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
@@ -189,7 +189,7 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
         }
 
         /* OVERLAY STYLES */
-        .waitful-overlay {
+        #waitful-overlay {
           background: var(--brand-bg) !important;
           color: var(--brand-primary) !important;
           position: fixed !important;
@@ -205,7 +205,7 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
         }
 
         /* FILL ANIMATION STYLES */
-        .waitful-fill {
+        #waitful-fill {
           position: absolute !important;
           bottom: 0 !important; left: 0 !important; right: 0 !important;
           background: linear-gradient(180deg, var(--brand-accent-light) 0%, var(--brand-accent-medium) 100%) !important;
@@ -215,7 +215,7 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
         }
 
         /* CONTENT CONTAINER STYLES */
-        .waitful-content-wrapper {
+        #waitful-content-wrapper {
           position: relative !important;
           z-index: 2 !important; /* Lower than fill */
           height: 100% !important;
@@ -228,7 +228,7 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
         }
 
         /* INITIAL MESSAGE STYLES */
-        .main-message {
+        #main-message {
           font-size: 2.25rem !important;
           font-weight: 300 !important;
           max-width: 500px !important;
@@ -243,7 +243,7 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
         }
 
         /* CALM STATS & DECISION UI STYLES */
-        .calm-container {
+        #calm-container {
           display: flex !important;
           flex-direction: column !important;
           align-items: center !important;
@@ -255,31 +255,31 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
           /* This container is always present but only visible when the fill reveals it */
         }
 
-        .stats-group {
+        #stats-group {
           display: flex !important;
           flex-direction: column !important;
           gap: 1.5rem !important;
         }
 
-        .stat-item {
+        #stat-item {
           display: flex !important;
           flex-direction: column !important;
           align-items: center !important;
         }
 
-        .stat-value {
+        #stat-value {
           font-size: 2.5rem !important; /* Slightly smaller for a calmer feel */
           font-weight: 600 !important;
           line-height: 1 !important;
         }
 
-        .stat-label {
+        #stat-label {
           font-size: 1rem !important;
           color: var(--brand-secondary) !important;
           margin-top: 0.5rem !important;
         }
 
-        .decision-group {
+        #decision-group {
           width: 100% !important;
           display: flex !important;
           flex-direction: column !important;
@@ -287,13 +287,14 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
           gap: 1rem !important;
         }
 
-        .decision-btn-primary {
+        #decision-btn-primary {
           width: 100% !important;
           padding: 16px !important;
           background: var(--brand-primary) !important;
           color: white !important;
           font-weight: 600 !important;
           font-size: 1.1rem !important;
+          text-align: center !important;
           border-radius: 1rem !important;
           border: none !important;
           cursor: pointer !important;
@@ -301,12 +302,12 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
           box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1) !important;
         }
 
-        .decision-btn-primary:hover {
+        #decision-btn-primary:hover {
           transform: translateY(-2px) !important;
           box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15) !important;
         }
 
-        .continue-link-secondary {
+        #continue-link-secondary {
           color: var(--brand-secondary) !important;
           font-size: 0.9rem !important;
           font-weight: 500 !important; /* Slightly bolder for clarity */
@@ -317,38 +318,38 @@ const BreathingOverlay = (props: BreathingOverlayProps) => {
           text-decoration: none !important;
         }
 
-        .continue-link-secondary:hover {
+        #continue-link-secondary:hover {
           text-decoration: underline !important;
         }
       `}</style>
 
-      <div className="waitful-overlay">
-        <div className="waitful-fill" />
-        <div className="waitful-content-wrapper">
-          <div className="main-message">{getMainMessage()}</div>
+      <div id="waitful-overlay">
+        <div id="waitful-fill" />
+        <div id="waitful-content-wrapper">
+          <div id="main-message">{getMainMessage()}</div>
 
           {breathingPhase === "complete" && (
-            <div className="calm-container">
-              <div className="stats-group">
-                <div className="stat-item">
-                  <span className="stat-value">{visitsInLast24h}</span>
-                  <span className="stat-label">
+            <div id="calm-container">
+              <div id="stats-group">
+                <div id="stat-item">
+                  <span id="stat-value">{visitsInLast24h}</span>
+                  <span id="stat-label">
                     visits to {siteName} in the last 24 hours
                   </span>
                 </div>
-                <div className="stat-item">
-                  <span className="stat-value">{lastVisitTimeAgo}</span>
-                  <span className="stat-label">since your last visit</span>
+                <div id="stat-item">
+                  <span id="stat-value">{lastVisitTimeAgo}</span>
+                  <span id="stat-label">since your last visit</span>
                 </div>
               </div>
 
-              <div className="decision-group">
-                <button onClick={onComplete} className="decision-btn-primary">
+              <div id="decision-group">
+                <button onClick={onComplete} id="decision-btn-primary">
                   I can wait, close this tab
                 </button>
                 <button
                   onClick={() => onSkip("proceed")}
-                  className="continue-link-secondary"
+                  id="continue-link-secondary"
                 >
                   Proceed to {siteName}
                 </button>
